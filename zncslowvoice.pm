@@ -4,7 +4,10 @@
 # (Between 60 and 90 seconds). This to prevent spam-on-join. See solbu's notes.
 
 # 27-01-2020 - v1.0 first draft
-# 28-01-2020 - fixed sub OnMode and $IsSVChannel regex
+# 28-01-2020 - fixed sub OnMode, $IsSVChannel regex(x2 - thanks Ouims!) 
+#            - fixed error "can't call GetName on undefined object" 
+#              when saving channel as argument in webpanel that you're not in. 
+
 
 use 5.012;
 use strict;
@@ -34,11 +37,13 @@ sub OnLoad {
 
   foreach my $svc (split /\s+/, $args) {
     my $objChan = $self->GetNetwork()->FindChan($svc);
-    my $Chan = $objChan->GetName;
-    my $bMyPerm = $objChan->HasPerm('@');
-    my $ChanIsNotModerated = $objChan->GetModeString !~ /m/;
+    if ( defined ( $objChan ) ) {
+      my $Chan = $objChan->GetName;
+      my $bMyPerm = $objChan->HasPerm('@');
+      my $ChanIsNotModerated = $objChan->GetModeString !~ /m/;
 
-    $self->PutIRC("MODE $Chan +m") if ( $bMyPerm && $ChanIsNotModerated )
+      $self->PutIRC("MODE $Chan +m") if ( $bMyPerm && $ChanIsNotModerated )
+    }
   }
   return $ZNC::CONTINUE;
 }
@@ -51,7 +56,7 @@ sub OnJoin {
 
   my $MyNick = $self->GetNetwork()->GetIRCSock->GetNick;
 
-  my $bFlag = $self->{sv_channels} =~ /\Q$chan\E/ && $nick ne $MyNick;
+  my $bFlag = $self->{sv_channels} =~ /\B\Q$chan\E(?=\s|$)/ && $nick ne $MyNick;
 
   if ( $bFlag ) {
     my $interval = 60 + int(rand(31));
@@ -67,7 +72,7 @@ sub OnMode {
   my $Chan = $ChanObj->GetName;
   $cMode = chr($cMode);
   my $bMyPerm = $ChanObj->HasPerm('@');
-  my $IsSVChannel = $self->{sv_channels} =~ /\Q$Chan\E/;
+  my $IsSVChannel = $self->{sv_channels} =~ /\B\Q$Chan\E(?=\s|$)/;
 
   $self->PutIRC("MODE $Chan +m") if ( !$bAdded && !$bNoChange && $cMode eq "m" && $bMyPerm && $IsSVChannel);
   
@@ -81,7 +86,7 @@ sub OnChanPermission {
   my $Chan = $ChanObj->GetName;
   my $Subject = $NickObj->GetNick;
   
-  my $IsSVChannel = $self->{sv_channels} =~ /\Q$Chan\E/;
+  my $IsSVChannel = $self->{sv_channels} =~ /\B\Q$Chan\E(?=\s|$)/;
   my $ChanIsNotModerated = $ChanObj->GetModeString !~ /m/;
   
   my $bFlag = $IsSVChannel && $ChanIsNotModerated && !$NoChange && $ModeIsAdded && chr($CharacterMode) eq "o" && $Subject eq $MyNick;
