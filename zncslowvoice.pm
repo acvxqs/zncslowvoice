@@ -4,6 +4,7 @@
 # (Between 60 and 90 seconds). This to prevent spam-on-join. See solbu's notes.
 
 # 27-01-2020 - v1.0 first draft
+# 28-01-2020 - fixed sub OnMode and $IsSVChannel regex
 
 use 5.012;
 use strict;
@@ -50,7 +51,7 @@ sub OnJoin {
 
   my $MyNick = $self->GetNetwork()->GetIRCSock->GetNick;
 
-  my $bFlag = $self->{sv_channels} =~ /^\Q$chan\E$/ && $nick ne $MyNick;
+  my $bFlag = $self->{sv_channels} =~ /\Q$chan\E/ && $nick ne $MyNick;
 
   if ( $bFlag ) {
     my $interval = 60 + int(rand(31));
@@ -65,8 +66,10 @@ sub OnMode {
   my ($self, $OpNick, $ChanObj, $cMode, $sArg, $bAdded, $bNoChange) = @_;
   my $Chan = $ChanObj->GetName;
   $cMode = chr($cMode);
+  my $bMyPerm = $ChanObj->HasPerm('@');
+  my $IsSVChannel = $self->{sv_channels} =~ /\Q$Chan\E/;
 
-  $self->PutIRC("MODE $Chan +m") if ( !$bAdded && !$bNoChange && $cMode eq "m");
+  $self->PutIRC("MODE $Chan +m") if ( !$bAdded && !$bNoChange && $cMode eq "m" && $bMyPerm && $IsSVChannel);
   
 }
 # If I'm being opped and channel is slowvoiced, set +m
@@ -78,7 +81,7 @@ sub OnChanPermission {
   my $Chan = $ChanObj->GetName;
   my $Subject = $NickObj->GetNick;
   
-  my $IsSVChannel = $self->{sv_channels} =~ /^\Q$Chan\E$/;
+  my $IsSVChannel = $self->{sv_channels} =~ /\Q$Chan\E/;
   my $ChanIsNotModerated = $ChanObj->GetModeString !~ /m/;
   
   my $bFlag = $IsSVChannel && $ChanIsNotModerated && !$NoChange && $ModeIsAdded && chr($CharacterMode) eq "o" && $Subject eq $MyNick;
